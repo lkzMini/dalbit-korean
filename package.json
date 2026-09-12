@@ -1,0 +1,9 @@
+{
+  "name": "dalbit-korean",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "check": "node --check app.js && node --check curriculum.js && node --check review.js && node --check session.js && node --check storage.js && node --check metrics.js"
+  }
+}
