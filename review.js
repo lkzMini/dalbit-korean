@@ -61,4 +61,3 @@ export function reviewWord(wordState, correct, now = new Date()) {
 export function canType(wordState) {
   return wordState.exposures >= 3 && wordState.level >= 1;
 }
-

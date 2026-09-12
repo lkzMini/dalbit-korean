@@ -80,4 +80,3 @@ export const curriculum = [
 ];
 
 export const curriculumById = new Map(curriculum.map((word) => [word.id, word]));
-
