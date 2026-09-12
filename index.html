@@ -4,174 +4,72 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#101514" />
-    <meta name="description" content="Dalbit: sesiones de coreano de 10 minutos, diseñadas para volver a avanzar sin fricción." />
-    <meta property="og:title" content="Dalbit — Korean Restart" />
-    <meta property="og:description" content="Un cockpit personal para retomar coreano, diez minutos por vez." />
+    <meta name="description" content="Dalbit: micro-sesiones diarias para aprender vocabulario coreano con repaso espaciado." />
+    <meta property="og:title" content="Dalbit — Coreano en micro-sesiones" />
+    <meta property="og:description" content="Un sistema personal y local para convertir Hangul en vocabulario útil." />
     <meta property="og:url" content="https://lkzmini.github.io/dalbit-korean/" />
-    <title>Dalbit — Korean Restart</title>
+    <title>Dalbit — Coreano en micro-sesiones</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <div class="ambient ambient-one"></div>
     <div class="ambient ambient-two"></div>
-
     <header class="topbar shell">
-      <a class="brand" href="#inicio" aria-label="Dalbit, inicio">
-        <span class="brand-mark" aria-hidden="true"><span></span></span>
-        <span>DALBIT <small>달빛</small></span>
-      </a>
-      <div class="topbar-meta">
-        <span class="status-dot" aria-hidden="true"></span>
-        <span id="todayLabel">Hoy</span>
-      </div>
+      <a class="brand" href="#inicio" aria-label="Dalbit, inicio"><span class="brand-mark" aria-hidden="true"><span></span></span><span>DALBIT <small>달빛</small></span></a>
+      <nav class="topnav" aria-label="Navegación principal"><a href="#progreso">Progreso</a><a href="#vocabulario">Vocabulario</a></nav>
+      <div class="topbar-meta"><span class="status-dot" aria-hidden="true"></span><span id="todayLabel">Hoy</span></div>
     </header>
 
     <main>
       <section class="hero shell" id="inicio">
         <div class="hero-copy reveal">
-          <p class="eyebrow">COREANO · REINICIO PERSONAL</p>
+          <p class="eyebrow">COREANO · PRÁCTICA PERSONAL</p>
           <h1>Volver a avanzar.<br /><em>Sin hacerlo enorme.</em></h1>
-          <p class="hero-lead">
-            Hangul ya no es el obstáculo. Ahora toca convertir sonidos en palabras:
-            una sesión breve, una pequeña victoria, todos los días.
-          </p>
-          <button class="primary-button" id="startButton" type="button">
-            <span>Empezar sesión</span>
-            <span class="button-time">10 MIN</span>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
-          </button>
-          <p class="resume-note" id="resumeNote">La sesión de hoy empieza con reconocimiento, no memorización forzada.</p>
+          <p class="hero-lead">Una sesión adaptada a lo que necesitás hoy: repaso pendiente, puntos débiles y pocas palabras nuevas.</p>
+          <button class="primary-button" id="startButton" type="button"><span>Empezar sesión</span><span class="button-time">HASTA 8</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg></button>
+          <p class="resume-note" id="resumeNote">Preparando tu próxima micro-sesión…</p>
         </div>
-
-        <aside class="dashboard-card reveal delay-one" aria-label="Progreso personal">
-          <div class="card-head">
-            <span>RITMO ACTUAL</span>
-            <span class="live-pill"><i></i> LOCAL</span>
+        <aside class="dashboard-card reveal delay-one" aria-label="Resumen de progreso">
+          <div class="card-head"><span>ESTADO DE APRENDIZAJE</span><span class="live-pill"><i></i> LOCAL</span></div>
+          <div class="moon-stage" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="moon"><span>가</span></div></div>
+          <div class="metric-grid metric-grid-five">
+            <div class="metric"><strong id="newValue">60</strong><span>nuevas</span></div><div class="metric"><strong id="learningValue">0</strong><span>aprendiendo</span></div><div class="metric"><strong id="masteredValue">0</strong><span>dominadas</span></div><div class="metric"><strong id="dueValue">0</strong><span>para hoy</span></div><div class="metric"><strong id="accuracyValue">—</strong><span>precisión</span></div>
           </div>
-          <div class="moon-stage" aria-hidden="true">
-            <div class="orbit orbit-one"></div>
-            <div class="orbit orbit-two"></div>
-            <div class="moon"><span>가</span></div>
-          </div>
-          <div class="metric-grid">
-            <div class="metric">
-              <strong id="streakValue">0</strong>
-              <span>días de ritmo</span>
-            </div>
-            <div class="metric">
-              <strong id="wordValue">0</strong>
-              <span>palabras vistas</span>
-            </div>
-            <div class="metric">
-              <strong id="accuracyValue">—</strong>
-              <span>precisión</span>
-            </div>
-          </div>
-          <div class="weekly" aria-label="Actividad de los últimos siete días">
-            <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
-            <div class="week-bars" id="weekBars"></div>
-          </div>
+          <div class="weekly" aria-label="Actividad de los últimos siete días"><div class="week-labels" id="weekLabels"></div><div class="week-bars" id="weekBars"></div></div>
+          <p class="streak-line"><strong id="streakValue">0</strong> días de ritmo actual</p>
         </aside>
       </section>
 
       <section class="lesson-shell shell" id="sesion" aria-live="polite">
-        <div class="section-heading reveal">
-          <div>
-            <p class="eyebrow">SESIÓN DE HOY</p>
-            <h2>Del sonido al significado.</h2>
-          </div>
-          <div class="lesson-status">
-            <span id="lessonCounter">0 / 8</span>
-            <span id="lessonTimer">00:00</span>
-          </div>
-        </div>
-
+        <div class="section-heading reveal"><div><p class="eyebrow">SESIÓN DE HOY</p><h2>Reconocer. Recordar. Consolidar.</h2></div><div class="lesson-status"><span id="lessonCounter">0 / —</span><span id="lessonTimer">00:00</span></div></div>
         <div class="lesson-card reveal delay-one" id="lessonCard">
-          <div class="lesson-placeholder" id="lessonPlaceholder">
-            <div class="mini-glyph">ㅎ</div>
-            <div>
-              <h3>Ocho decisiones pequeñas.</h3>
-              <p>Lectura, vocabulario y una frase mínima. Sin rachas punitivas ni listas interminables.</p>
-            </div>
-            <button class="text-button" id="secondaryStart" type="button">Iniciar ahora <span>↗</span></button>
-          </div>
-
+          <div class="lesson-placeholder" id="lessonPlaceholder"><div class="mini-glyph">ㅎ</div><div><h3>Ocho decisiones pequeñas.</h3><p id="sessionPreview">La sesión se arma con tus repasos y hasta dos palabras nuevas.</p></div><button class="text-button" id="secondaryStart" type="button">Iniciar ahora <span>↗</span></button></div>
           <div class="quiz" id="quiz" hidden>
-            <div class="progress-track"><span id="progressFill"></span></div>
-            <p class="quiz-type" id="quizType">RECONOCIMIENTO</p>
-            <div class="prompt-wrap">
-              <p class="korean-prompt" id="quizPrompt" lang="ko">나</p>
-              <p class="prompt-hint" id="quizHint">¿Qué significa esta palabra?</p>
-            </div>
+            <div class="progress-track" aria-hidden="true"><span id="progressFill"></span></div>
+            <div class="quiz-meta"><p class="quiz-type" id="quizType">RECONOCIMIENTO</p><button class="icon-button" id="audioButton" type="button" aria-label="Escuchar palabra en coreano" hidden>▶ Escuchar</button></div>
+            <div class="prompt-wrap"><p class="korean-prompt" id="quizPrompt" lang="ko"></p><p class="romanization" id="quizRomanization" hidden></p><p class="prompt-hint" id="quizHint"></p></div>
             <div class="answers" id="answers"></div>
-            <div class="feedback" id="feedback" hidden>
-              <div>
-                <strong id="feedbackTitle">Correcto</strong>
-                <p id="feedbackText"></p>
-              </div>
-              <button id="nextButton" type="button">Siguiente <span>→</span></button>
-            </div>
+            <form class="typing-answer" id="typingForm" hidden><label for="typingInput">Escribí la palabra en Hangul</label><div><input id="typingInput" lang="ko" autocomplete="off" autocapitalize="off" spellcheck="false" /><button type="submit">Comprobar</button></div></form>
+            <div class="feedback" id="feedback" hidden><div><strong id="feedbackTitle"></strong><p id="feedbackText"></p><p class="example" id="feedbackExample" lang="ko"></p></div><button id="nextButton" type="button">Siguiente <span>→</span></button></div>
           </div>
-
-          <div class="result" id="result" hidden>
-            <div class="result-ring" id="resultRing"><span id="resultScore">0%</span></div>
-            <div>
-              <p class="eyebrow">SESIÓN COMPLETADA</p>
-              <h3 id="resultTitle">Buen reinicio.</h3>
-              <p id="resultText">Hoy convertiste ocho lecturas en significado.</p>
-              <div class="result-actions">
-                <button class="primary-button compact" id="retryButton" type="button">Repetir puntos débiles</button>
-                <button class="text-button" id="closeResult" type="button">Volver al panel</button>
-              </div>
-            </div>
-          </div>
+          <div class="result" id="result" hidden><div class="result-ring" id="resultRing"><span id="resultScore">0%</span></div><div><p class="eyebrow">SESIÓN COMPLETADA</p><h3 id="resultTitle">Sesión guardada.</h3><p id="resultText"></p><div class="result-actions"><button class="primary-button compact" id="anotherSession" type="button">Otra micro-sesión</button><button class="text-button" id="closeResult" type="button">Volver al panel</button></div></div></div>
         </div>
       </section>
 
-      <section class="path-section shell" id="ruta">
-        <div class="path-intro reveal">
-          <p class="eyebrow">RUTA MÍNIMA</p>
-          <h2>Primero palabras útiles.<br />Después, estructura.</h2>
-          <p>No Hanja. No gramática abstracta todavía. La ruta se abre cuando el vocabulario deja de ser cero.</p>
-        </div>
-
-        <div class="path-grid reveal delay-one">
-          <article class="path-card active">
-            <div class="path-number">01</div>
-            <div>
-              <span class="path-state">AHORA</span>
-              <h3>Reconocer 30 palabras</h3>
-              <p>Personas, lugares, objetos y verbos que aparecen desde el primer día.</p>
-            </div>
-            <div class="path-progress"><span id="vocabProgress"></span></div>
-          </article>
-          <article class="path-card">
-            <div class="path-number">02</div>
-            <div>
-              <span class="path-state">DESPUÉS</span>
-              <h3>Frases de supervivencia</h3>
-              <p>Presentarte, preguntar y comprender respuestas cortas.</p>
-            </div>
-            <span class="lock" aria-label="Bloqueado">⌁</span>
-          </article>
-          <article class="path-card">
-            <div class="path-number">03</div>
-            <div>
-              <span class="path-state">MÁS ADELANTE</span>
-              <h3>Gramática en contexto</h3>
-              <p>Partículas y patrones dentro de frases que ya resultan familiares.</p>
-            </div>
-            <span class="lock" aria-label="Bloqueado">⌁</span>
-          </article>
-        </div>
+      <section class="progress-section shell" id="progreso">
+        <div class="section-heading"><div><p class="eyebrow">PROGRESO REAL</p><h2>Avance por unidad.</h2></div><p class="section-note">Una palabra se considera dominada al alcanzar el nivel 5.</p></div>
+        <div class="unit-grid" id="unitGrid"></div>
       </section>
+
+      <section class="vocab-section shell" id="vocabulario">
+        <div class="section-heading vocab-heading"><div><p class="eyebrow">VOCABULARIO</p><h2>Tu mapa de palabras.</h2></div><div class="toolbar"><label>Estado<select id="statusFilter"><option value="seen">Vistas</option><option value="all">Todas</option><option value="learning">En aprendizaje</option><option value="mastered">Dominadas</option><option value="new">Nuevas</option></select></label><label>Unidad<select id="unitFilter"><option value="all">Todas</option></select></label><button class="toggle-button" id="romanizationToggle" type="button" aria-pressed="false">Mostrar romanización</button></div></div>
+        <p class="empty-state" id="vocabEmpty">Todavía no viste palabras. Empezá una sesión para construir este mapa.</p><div class="vocab-grid" id="vocabGrid"></div>
+      </section>
+
+      <section class="data-section shell" aria-labelledby="dataTitle"><div><p class="eyebrow">DATOS LOCALES</p><h2 id="dataTitle">Tu progreso es tuyo.</h2><p>Exportá una copia antes de cambiar de navegador o dispositivo.</p></div><div class="data-actions"><button class="secondary-button" id="exportButton" type="button">Exportar JSON</button><label class="secondary-button file-button" for="importInput">Importar JSON</label><input id="importInput" type="file" accept="application/json,.json" hidden /><button class="danger-button" id="resetButton" type="button">Reiniciar progreso</button></div></section>
     </main>
-
-    <footer class="shell">
-      <span>DALBIT / 달빛</span>
-      <span>El progreso se guarda solamente en este navegador.</span>
-    </footer>
-
-    <script src="./app.js"></script>
+    <footer class="shell"><span>DALBIT / 달빛</span><span>El progreso se guarda solamente en este navegador.</span></footer>
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+    <script type="module" src="./app.js"></script>
   </body>
 </html>

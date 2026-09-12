@@ -1,185 +1,376 @@
-const lessonBank = [
-  { prompt: "나", answer: "yo", options: ["yo", "tú", "persona", "país"], note: "나 (na) es la forma informal de decir ‘yo’." },
-  { prompt: "너", answer: "tú", options: ["casa", "tú", "yo", "agua"], note: "너 (neo) significa ‘tú’ en contextos informales." },
-  { prompt: "사람", answer: "persona", options: ["amor", "persona", "árbol", "idioma"], note: "사람 (saram) significa ‘persona’. Ya la habías leído antes." },
-  { prompt: "물", answer: "agua", options: ["fuego", "comida", "agua", "escuela"], note: "물 (mul) significa ‘agua’." },
-  { prompt: "집", answer: "casa", options: ["casa", "Corea", "libro", "nombre"], note: "집 (jip) significa ‘casa’ u ‘hogar’." },
-  { prompt: "밥", answer: "arroz / comida", options: ["persona", "arroz / comida", "agua", "gracias"], note: "밥 (bap) es arroz cocido y, por extensión, una comida." },
-  { prompt: "한국", answer: "Corea", options: ["Hangul", "Corea", "coreano", "escuela"], note: "한국 (Hanguk) es Corea. 한국어 es el idioma coreano." },
-  { prompt: "안녕하세요", answer: "hola", options: ["adiós", "gracias", "hola", "sí"], note: "안녕하세요 (annyeonghaseyo) es el saludo cortés más común." },
-  { prompt: "학교", answer: "escuela", options: ["escuela", "casa", "amigo", "trabajo"], note: "학교 (hakgyo) significa ‘escuela’." },
-  { prompt: "책", answer: "libro", options: ["árbol", "nombre", "libro", "comida"], note: "책 (chaek) significa ‘libro’." },
-  { prompt: "친구", answer: "amigo/a", options: ["profesor", "persona", "amigo/a", "familia"], note: "친구 (chingu) significa ‘amigo’ o ‘amiga’." },
-  { prompt: "감사합니다", answer: "gracias", options: ["perdón", "hola", "gracias", "bien"], note: "감사합니다 (gamsahamnida) es una forma cortés de dar las gracias." }
-];
-
-const STORAGE_KEY = "dalbit-progress-v1";
-const defaultState = { sessions: [], seen: [], correct: 0, attempts: 0 };
-let saved = loadState();
-let session = [];
-let current = 0;
-let score = 0;
-let missed = [];
-let startedAt = null;
-let timerId = null;
+import { curriculum, units } from "./curriculum.js";
+import { calculateMetrics } from "./metrics.js";
+import { MASTERY_LEVELS, dateKey, getWordState, reviewWord } from "./review.js";
+import { buildExercise, selectSessionWords } from "./session.js";
+import { importProgress, loadProgress, resetProgress, saveProgress } from "./storage.js";
 
 const $ = (selector) => document.querySelector(selector);
 const els = {
   start: $("#startButton"), secondaryStart: $("#secondaryStart"), placeholder: $("#lessonPlaceholder"),
   quiz: $("#quiz"), result: $("#result"), prompt: $("#quizPrompt"), hint: $("#quizHint"),
-  type: $("#quizType"), answers: $("#answers"), feedback: $("#feedback"), feedbackTitle: $("#feedbackTitle"),
-  feedbackText: $("#feedbackText"), next: $("#nextButton"), fill: $("#progressFill"),
+  romanization: $("#quizRomanization"), type: $("#quizType"), answers: $("#answers"),
+  typingForm: $("#typingForm"), typingInput: $("#typingInput"), audio: $("#audioButton"),
+  feedback: $("#feedback"), feedbackTitle: $("#feedbackTitle"), feedbackText: $("#feedbackText"),
+  feedbackExample: $("#feedbackExample"), next: $("#nextButton"), fill: $("#progressFill"),
   counter: $("#lessonCounter"), timer: $("#lessonTimer"), score: $("#resultScore"), ring: $("#resultRing"),
-  resultTitle: $("#resultTitle"), resultText: $("#resultText"), retry: $("#retryButton"), close: $("#closeResult"),
-  streak: $("#streakValue"), words: $("#wordValue"), accuracy: $("#accuracyValue"), bars: $("#weekBars"),
-  vocabProgress: $("#vocabProgress"), today: $("#todayLabel"), resumeNote: $("#resumeNote")
+  resultTitle: $("#resultTitle"), resultText: $("#resultText"), another: $("#anotherSession"), close: $("#closeResult"),
+  streak: $("#streakValue"), newWords: $("#newValue"), learning: $("#learningValue"),
+  mastered: $("#masteredValue"), due: $("#dueValue"), accuracy: $("#accuracyValue"),
+  bars: $("#weekBars"), weekLabels: $("#weekLabels"), unitGrid: $("#unitGrid"),
+  vocabGrid: $("#vocabGrid"), vocabEmpty: $("#vocabEmpty"), statusFilter: $("#statusFilter"),
+  unitFilter: $("#unitFilter"), romanizationToggle: $("#romanizationToggle"), today: $("#todayLabel"),
+  resumeNote: $("#resumeNote"), sessionPreview: $("#sessionPreview"), export: $("#exportButton"),
+  import: $("#importInput"), reset: $("#resetButton"), toast: $("#toast")
 };
 
-function loadState() {
-  try { return { ...defaultState, ...JSON.parse(localStorage.getItem(STORAGE_KEY)) }; }
-  catch { return { ...defaultState }; }
+const loaded = loadProgress();
+let progress = loaded.progress;
+let session = [];
+let current = 0;
+let correctCount = 0;
+let answered = false;
+let startedAt = null;
+let timerId = null;
+let showRomanization = false;
+let toastTimer = null;
+
+function showToast(message, kind = "info") {
+  clearTimeout(toastTimer);
+  els.toast.textContent = message;
+  els.toast.dataset.kind = kind;
+  els.toast.hidden = false;
+  toastTimer = setTimeout(() => { els.toast.hidden = true; }, 6000);
 }
 
-function saveState() { localStorage.setItem(STORAGE_KEY, JSON.stringify(saved)); }
-function localDate(date = new Date()) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+function koreanVoice() {
+  if (!("speechSynthesis" in window)) return null;
+  return window.speechSynthesis.getVoices().find((voice) => voice.lang.toLowerCase().startsWith("ko")) || null;
 }
 
-function streakCount() {
-  const days = [...new Set(saved.sessions.map(s => s.date))].sort().reverse();
-  if (!days.length) return 0;
-  const cursor = new Date();
-  const today = localDate(cursor);
-  cursor.setDate(cursor.getDate() - (days[0] === today ? 0 : 1));
-  let count = 0;
-  for (const day of days) {
-    if (day !== localDate(cursor)) break;
-    count++;
-    cursor.setDate(cursor.getDate() - 1);
+function speakCurrent() {
+  const item = session[current];
+  const voice = koreanVoice();
+  if (!item || !voice) {
+    showToast("Este navegador no tiene una voz coreana disponible. La sesión continúa en modo visual.");
+    return false;
   }
-  return count;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(item.word.hangul);
+  utterance.lang = "ko-KR";
+  utterance.voice = voice;
+  utterance.rate = 0.82;
+  window.speechSynthesis.speak(utterance);
+  return true;
+}
+
+function exerciseLabel(type) {
+  return {
+    "ko-to-es": "HANGUL → ESPAÑOL",
+    "es-to-ko": "ESPAÑOL → HANGUL",
+    audio: "RECONOCIMIENTO AUDITIVO",
+    typing: "ESCRITURA EN HANGUL"
+  }[type];
+}
+
+function deterministicOptions(options, wordId) {
+  const offset = [...wordId].reduce((sum, character) => sum + character.charCodeAt(0), 0) % options.length;
+  return [...options.slice(offset), ...options.slice(0, offset)];
 }
 
 function updateDashboard() {
-  els.streak.textContent = streakCount();
-  els.words.textContent = saved.seen.length;
-  els.accuracy.textContent = saved.attempts ? `${Math.round(saved.correct / saved.attempts * 100)}%` : "—";
-  els.vocabProgress.style.width = `${Math.min(saved.seen.length / 30 * 100, 100)}%`;
+  const metrics = calculateMetrics(progress, curriculum);
+  els.newWords.textContent = metrics.newWords;
+  els.learning.textContent = metrics.learning;
+  els.mastered.textContent = metrics.mastered;
+  els.due.textContent = metrics.due;
+  els.accuracy.textContent = metrics.recentAccuracy === null ? "—" : `${metrics.recentAccuracy}%`;
+  els.streak.textContent = metrics.streak;
+
+  els.weekLabels.innerHTML = "";
   els.bars.innerHTML = "";
-  for (let offset = 6; offset >= 0; offset--) {
-    const date = new Date(); date.setDate(date.getDate() - offset);
-    const active = saved.sessions.some(s => s.date === localDate(date));
+  for (let offset = 6; offset >= 0; offset -= 1) {
+    const day = new Date();
+    day.setDate(day.getDate() - offset);
+    const key = dateKey(day);
+    const count = progress.sessions.filter((item) => item.date === key).length;
+    const label = document.createElement("span");
+    label.textContent = new Intl.DateTimeFormat("es", { weekday: "narrow" }).format(day);
     const bar = document.createElement("i");
-    if (active) bar.className = "done";
+    bar.className = count ? "done" : "";
+    bar.style.setProperty("--activity", String(Math.min(1, 0.45 + count * 0.2)));
+    bar.title = `${key}: ${count} sesión${count === 1 ? "" : "es"}`;
+    els.weekLabels.appendChild(label);
     els.bars.appendChild(bar);
   }
-  const todayDone = saved.sessions.some(s => s.date === localDate());
-  if (todayDone) {
-    els.start.querySelector("span").textContent = "Practicar otra vez";
-    els.resumeNote.textContent = "La sesión de hoy ya está completa. Repetir sigue sumando precisión.";
+
+  const todayDone = progress.sessions.some((item) => item.date === dateKey());
+  els.start.querySelector("span").textContent = todayDone ? "Continuar practicando" : "Empezar sesión";
+  els.resumeNote.textContent = metrics.due
+    ? `${metrics.due} palabra${metrics.due === 1 ? "" : "s"} pendiente${metrics.due === 1 ? "" : "s"} de repaso hoy.`
+    : todayDone ? "La sesión diaria está completa. Podés consolidar un poco más." : "No hay deuda de repaso: hoy vas a sumar una base nueva.";
+
+  renderUnits(metrics.unitProgress);
+  renderVocabulary();
+  updateSessionPreview();
+}
+
+function renderUnits(unitProgress) {
+  els.unitGrid.innerHTML = "";
+  for (const unit of units) {
+    const stats = unitProgress[unit.id];
+    const percentage = Math.round((stats.seen / stats.total) * 100);
+    const article = document.createElement("article");
+    article.className = "unit-card";
+    article.innerHTML = `<div class="unit-card-head"><span>UNIDAD ${String(unit.id).padStart(2, "0")}</span><strong>${percentage}%</strong></div><h3>${unit.title}</h3><p>${unit.description}</p><div class="unit-stats"><span>${stats.seen}/${stats.total} vistas</span><span>${stats.mastered} dominadas</span></div><div class="path-progress"><span style="width:${percentage}%"></span></div>`;
+    els.unitGrid.appendChild(article);
   }
 }
 
-function shuffle(items) {
-  const copy = [...items];
-  for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-  }
-  return copy;
+function matchesStatus(state, filter) {
+  if (filter === "all") return true;
+  if (filter === "seen") return state.exposures > 0;
+  if (filter === "new") return state.exposures === 0;
+  if (filter === "mastered") return state.level === 5;
+  return state.exposures > 0 && state.level < 5;
 }
 
-function begin(customQuestions) {
-  session = customQuestions?.length ? [...customQuestions, ...shuffle(lessonBank.filter(x => !customQuestions.includes(x)))].slice(0, 8) : shuffle(lessonBank).slice(0, 8);
-  current = 0; score = 0; missed = []; startedAt = Date.now();
-  els.placeholder.hidden = true; els.result.hidden = true; els.quiz.hidden = false;
-  clearInterval(timerId); timerId = setInterval(updateTimer, 1000); updateTimer();
-  renderQuestion();
-  document.querySelector("#sesion").scrollIntoView({ behavior: "smooth", block: "start" });
+function renderVocabulary() {
+  const status = els.statusFilter.value;
+  const unit = els.unitFilter.value;
+  const visible = curriculum.filter((word) => {
+    const state = getWordState(progress, word.id);
+    return matchesStatus(state, status) && (unit === "all" || word.unit === Number(unit));
+  });
+  els.vocabGrid.innerHTML = "";
+  els.vocabEmpty.hidden = visible.length > 0;
+  for (const word of visible) {
+    const state = getWordState(progress, word.id);
+    const card = document.createElement("article");
+    card.className = "vocab-card";
+    card.innerHTML = `<div><strong lang="ko">${word.hangul}</strong><span class="vocab-romanization" ${showRomanization ? "" : "hidden"}>${word.romanization}</span></div><p>${word.meaning}</p><span class="level-tag">${MASTERY_LEVELS[state.level]} · nivel ${state.level}</span>`;
+    els.vocabGrid.appendChild(card);
+  }
+}
+
+function updateSessionPreview() {
+  const preview = selectSessionWords(curriculum, progress);
+  const reviews = preview.filter((item) => item.state.exposures > 0).length;
+  const newCount = preview.length - reviews;
+  els.sessionPreview.textContent = `${reviews} repaso${reviews === 1 ? "" : "s"} y ${newCount} palabra${newCount === 1 ? "" : "s"} nueva${newCount === 1 ? "" : "s"}, sin duplicados.`;
 }
 
 function updateTimer() {
-  const seconds = Math.floor((Date.now() - startedAt) / 1000);
+  const seconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
   els.timer.textContent = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
-function renderQuestion() {
-  const item = session[current];
-  els.counter.textContent = `${current + 1} / ${session.length}`;
-  els.fill.style.width = `${current / session.length * 100}%`;
-  els.prompt.textContent = item.prompt;
-  els.hint.textContent = "¿Qué significa esta palabra?";
-  els.type.textContent = current < 3 ? "RECONOCIMIENTO" : current < 6 ? "VOCABULARIO" : "CONSOLIDACIÓN";
-  els.answers.innerHTML = "";
-  els.feedback.hidden = true; els.feedback.className = "feedback";
-
-  shuffle(item.options).forEach((option, index) => {
-    const button = document.createElement("button");
-    button.className = "answer";
-    button.type = "button";
-    button.innerHTML = `<span>${option}</span><b>${String.fromCharCode(65 + index)}</b>`;
-    button.addEventListener("click", () => answer(option, button));
-    els.answers.appendChild(button);
-  });
+function begin() {
+  session = selectSessionWords(curriculum, progress).map((item) => ({ ...item, exercise: buildExercise(item, curriculum) }));
+  current = 0;
+  correctCount = 0;
+  answered = false;
+  startedAt = Date.now();
+  els.placeholder.hidden = true;
+  els.result.hidden = true;
+  els.quiz.hidden = false;
+  clearInterval(timerId);
+  timerId = setInterval(updateTimer, 1000);
+  updateTimer();
+  renderQuestion();
+  $("#sesion").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-function answer(choice, chosenButton) {
+function renderQuestion() {
+  answered = false;
   const item = session[current];
-  const correct = choice === item.answer;
-  saved.attempts++;
-  if (correct) { score++; saved.correct++; } else { missed.push(item); }
-  if (!saved.seen.includes(item.prompt)) saved.seen.push(item.prompt);
-  [...els.answers.children].forEach(button => {
+  let exercise = item.exercise;
+  if (exercise.type === "audio" && !koreanVoice()) exercise = buildExercise({ ...item, type: "ko-to-es" }, curriculum);
+  item.activeExercise = exercise;
+
+  els.counter.textContent = `${current + 1} / ${session.length}`;
+  els.fill.style.width = `${(current / session.length) * 100}%`;
+  els.type.textContent = exerciseLabel(exercise.type);
+  els.answers.innerHTML = "";
+  els.feedback.hidden = true;
+  els.feedback.className = "feedback";
+  els.typingForm.hidden = exercise.type !== "typing";
+  els.answers.hidden = exercise.type === "typing";
+  els.audio.hidden = exercise.type !== "audio";
+  els.romanization.hidden = true;
+  els.romanization.textContent = item.word.romanization;
+
+  if (exercise.type === "audio") {
+    els.prompt.textContent = "듣기";
+    els.hint.textContent = "Escuchá y elegí el significado.";
+    setTimeout(speakCurrent, 180);
+  } else if (exercise.type === "typing") {
+    els.prompt.textContent = exercise.prompt;
+    els.hint.textContent = "Usá el teclado coreano; la escritura aparece después de varias exposiciones.";
+    els.typingInput.value = "";
+    setTimeout(() => els.typingInput.focus(), 0);
+  } else {
+    els.prompt.textContent = exercise.prompt;
+    els.hint.textContent = exercise.type === "ko-to-es" ? "¿Qué significa esta palabra?" : "¿Cómo se escribe en Hangul?";
+  }
+
+  if (exercise.type !== "typing") {
+    deterministicOptions(exercise.options, item.word.id).forEach((option, index) => {
+      const button = document.createElement("button");
+      button.className = "answer";
+      button.type = "button";
+      button.innerHTML = `<span>${option}</span><b>${String.fromCharCode(65 + index)}</b>`;
+      button.addEventListener("click", () => submitAnswer(option, button));
+      els.answers.appendChild(button);
+    });
+  }
+}
+
+function submitAnswer(choice, chosenButton = null) {
+  if (answered) return;
+  answered = true;
+  const item = session[current];
+  const exercise = item.activeExercise;
+  const normalizedChoice = String(choice).trim().normalize("NFC");
+  const correct = normalizedChoice === exercise.answer.normalize("NFC");
+  if (correct) correctCount += 1;
+
+  progress.words[item.word.id] = reviewWord(getWordState(progress, item.word.id), correct);
+  progress.stats.attempts += 1;
+  if (correct) progress.stats.correct += 1;
+  progress = saveProgress(progress);
+
+  [...els.answers.children].forEach((button) => {
     button.disabled = true;
-    if (button.querySelector("span").textContent === item.answer) button.classList.add("correct");
+    if (button.querySelector("span").textContent === exercise.answer) button.classList.add("correct");
   });
-  if (!correct) chosenButton.classList.add("wrong");
-  els.feedbackTitle.textContent = correct ? "Correcto" : "Casi";
-  els.feedbackText.textContent = item.note;
+  if (!correct && chosenButton) chosenButton.classList.add("wrong");
+  els.typingInput.disabled = true;
+  els.typingForm.querySelector("button").disabled = true;
+
+  els.feedbackTitle.textContent = correct ? "Correcto" : "Todavía no";
+  els.feedbackText.textContent = correct
+    ? `${item.word.hangul} significa “${item.word.meaning}”.`
+    : `La respuesta correcta es ${exercise.answer}. ${item.word.hangul} significa “${item.word.meaning}”.`;
+  els.feedbackExample.textContent = item.word.example ? `${item.word.example.ko} · ${item.word.example.es}` : "";
+  els.feedbackExample.hidden = !item.word.example;
+  els.romanization.hidden = !showRomanization;
   els.feedback.className = correct ? "feedback" : "feedback wrong";
   els.feedback.hidden = false;
   els.next.focus({ preventScroll: true });
-  saveState(); updateDashboard();
+  updateDashboard();
 }
 
 function nextQuestion() {
-  current++;
+  if (!answered) return;
+  current += 1;
+  els.typingInput.disabled = false;
+  els.typingForm.querySelector("button").disabled = false;
   if (current < session.length) renderQuestion(); else finish();
 }
 
 function finish() {
   clearInterval(timerId);
-  const percentage = Math.round(score / session.length * 100);
-  saved.sessions.push({ date: localDate(), score: percentage, duration: Math.floor((Date.now() - startedAt) / 1000) });
-  saved.sessions = saved.sessions.slice(-60);
-  saveState(); updateDashboard();
-  els.quiz.hidden = true; els.result.hidden = false; els.counter.textContent = `${session.length} / ${session.length}`; els.fill.style.width = "100%";
-  els.score.textContent = `${percentage}%`; els.ring.style.setProperty("--score", `${percentage * 3.6}deg`);
-  els.resultTitle.textContent = percentage >= 88 ? "Excelente sesión." : percentage >= 63 ? "Buen reinicio." : "Ya hay una base.";
-  els.resultText.textContent = missed.length ? `Reconociste ${score} de ${session.length}. Repetirás ${missed.length} palabra${missed.length === 1 ? "" : "s"} que todavía necesitan otra vuelta.` : "Reconociste las ocho palabras. Mañana conviene sumar una capa nueva.";
-  els.retry.hidden = missed.length === 0;
+  const attempts = session.length;
+  const percentage = Math.round((correctCount / attempts) * 100);
+  progress.sessions.push({
+    date: dateKey(), correct: correctCount, attempts, score: percentage,
+    duration: Math.max(1, Math.floor((Date.now() - startedAt) / 1000))
+  });
+  progress.sessions = progress.sessions.slice(-180);
+  progress = saveProgress(progress);
+  updateDashboard();
+
+  els.quiz.hidden = true;
+  els.result.hidden = false;
+  els.counter.textContent = `${attempts} / ${attempts}`;
+  els.fill.style.width = "100%";
+  els.score.textContent = `${percentage}%`;
+  els.ring.style.setProperty("--score", `${percentage * 3.6}deg`);
+  els.resultTitle.textContent = percentage >= 88 ? "Excelente consolidación." : percentage >= 63 ? "Buen avance." : "La base ya está trabajando.";
+  els.resultText.textContent = `Acertaste ${correctCount} de ${attempts}. Los errores ya quedaron adelantados para el próximo repaso.`;
 }
 
 function closeResult() {
-  els.result.hidden = true; els.placeholder.hidden = false;
-  document.querySelector("#inicio").scrollIntoView({ behavior: "smooth" });
+  els.result.hidden = true;
+  els.placeholder.hidden = false;
+  $("#inicio").scrollIntoView({ behavior: "smooth" });
 }
 
-els.start.addEventListener("click", () => begin());
-els.secondaryStart.addEventListener("click", () => begin());
+function exportData() {
+  const blob = new Blob([JSON.stringify(progress, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `dalbit-progreso-${dateKey()}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+  showToast("Copia de progreso exportada.");
+}
+
+async function handleImport(event) {
+  const [file] = event.target.files;
+  if (!file) return;
+  try {
+    const raw = await file.text();
+    if (!window.confirm("La importación reemplazará el progreso actual. ¿Querés continuar?")) return;
+    progress = importProgress(raw);
+    updateDashboard();
+    showToast("Progreso importado correctamente.");
+  } catch (error) {
+    showToast(error.message, "error");
+  } finally {
+    event.target.value = "";
+  }
+}
+
+function handleReset() {
+  const confirmation = window.prompt("Para borrar todo el progreso, escribí REINICIAR.");
+  if (confirmation !== "REINICIAR") {
+    if (confirmation !== null) showToast("No se reinició el progreso: la confirmación no coincide.");
+    return;
+  }
+  progress = resetProgress();
+  updateDashboard();
+  showToast("El progreso se reinició.");
+}
+
+els.start.addEventListener("click", begin);
+els.secondaryStart.addEventListener("click", begin);
+els.another.addEventListener("click", begin);
 els.next.addEventListener("click", nextQuestion);
-els.retry.addEventListener("click", () => begin(missed));
 els.close.addEventListener("click", closeResult);
+els.audio.addEventListener("click", speakCurrent);
+els.typingForm.addEventListener("submit", (event) => { event.preventDefault(); submitAnswer(els.typingInput.value); });
+els.statusFilter.addEventListener("change", renderVocabulary);
+els.unitFilter.addEventListener("change", renderVocabulary);
+els.romanizationToggle.addEventListener("click", () => {
+  showRomanization = !showRomanization;
+  els.romanizationToggle.setAttribute("aria-pressed", String(showRomanization));
+  els.romanizationToggle.textContent = showRomanization ? "Ocultar romanización" : "Mostrar romanización";
+  renderVocabulary();
+});
+els.export.addEventListener("click", exportData);
+els.import.addEventListener("change", handleImport);
+els.reset.addEventListener("click", handleReset);
+
 document.addEventListener("keydown", (event) => {
-  if (!els.feedback.hidden && (event.key === "Enter" || event.key === " ")) nextQuestion();
-  if (!els.quiz.hidden && els.feedback.hidden && /^[1-4a-d]$/i.test(event.key)) {
+  if (!els.feedback.hidden && (event.key === "Enter" || event.key === " ")) {
+    event.preventDefault();
+    nextQuestion();
+  }
+  if (!els.quiz.hidden && els.feedback.hidden && !els.answers.hidden && /^[1-4a-d]$/i.test(event.key)) {
     const index = /\d/.test(event.key) ? Number(event.key) - 1 : event.key.toLowerCase().charCodeAt(0) - 97;
     els.answers.children[index]?.click();
   }
 });
 
-els.today.textContent = new Intl.DateTimeFormat("es-AR", { weekday: "short", day: "2-digit", month: "short" }).format(new Date());
+for (const unit of units) {
+  const option = document.createElement("option");
+  option.value = unit.id;
+  option.textContent = `${unit.id}. ${unit.title}`;
+  els.unitFilter.appendChild(option);
+}
+
+els.today.textContent = new Intl.DateTimeFormat("es", { weekday: "short", day: "2-digit", month: "short" }).format(new Date());
 updateDashboard();
+if (loaded.notice) showToast(loaded.notice);
